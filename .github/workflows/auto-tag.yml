@@ -11,4 +11,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Auto-tag
-        uses: silverstripe/gha-auto-tag@v1
+        # uses: silverstripe/gha-auto-tag@v1
+        uses: emteknetnz/gha-auto-tag@main
