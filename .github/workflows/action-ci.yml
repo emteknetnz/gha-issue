@@ -8,4 +8,5 @@ on:
 jobs:
   actionci:
     name: Action CI
-    uses: silverstripe/gha-action-ci/.github/workflows/action-ci.yml@v1
+    # uses: silverstripe/gha-action-ci/.github/workflows/action-ci.yml@v1
+    uses: emteknetnz/gha-action-ci/.github/workflows/action-ci.yml@main
