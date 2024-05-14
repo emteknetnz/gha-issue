@@ -8,10 +8,48 @@ inputs:
   description:
     type: string
     required: true
+  close_existing:
+    type: boolean
+    required: false
+    default: false
 
 runs:
   using: composite
   steps:
+
+    - name: Close existing issues
+      shell: bash
+      if: ${{ inputs.close_existing == 'true' }}
+      env:
+        TITLE: ${{ inputs.title }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        # Close any existing issues with the same title
+        # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28
+        RESP_CODE=$(curl -w %{http_code} -s -o __issues.json \
+        -X GET https://api.github.com/repos/$GITHUB_REPOSITORY/issues?state=open \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: token ${{ github.token }}" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to fetch issues - HTTP response code was $RESP_CODE"
+          exit 1
+        fi
+        ISSUE_NUMBERS=$(jq -r --arg TITLE "$TITLE" '.[] | select(.title == $TITLE) | select(.user.login == "github-actions[bot]" | .number' __issues.json)
+        for ISSUE_NUMBER in $ISSUE_NUMBERS; do
+          # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#update-an-issue
+          RESP_CODE=$(curl -w %{http_code} -s -o __issues.json \
+          -X PATCH https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: token ${{ github.token }}" \
+          -d '{"state":"closed"}'
+          )
+          if [[ $RESP_CODE != "200" ]]; then
+            echo "Unable to close issue $ISSUE_NUMBER - HTTP response code was $RESP_CODE"
+            exit 1
+          fi
+          echo "Issue $ISSUE_NUMBER closed"
+        done
 
     - name: Create issue
       shell: bash
@@ -24,7 +62,7 @@ runs:
         TITLE=${TITLE//\"/\\\"}
         DESCRIPTION=${DESCRIPTION//\"/\\\"}
 
-        # Create new pull-request via GitHub API
+        # Create new issue via GitHub API
         # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#create-an-issue
         RESP_CODE=$(curl -w %{http_code} -s -o /dev/null \
         -X POST https://api.github.com/repos/$GITHUB_REPOSITORY/issues \
@@ -43,4 +81,12 @@ runs:
         else
           echo "Fail to create issue - HTTP response code was $RESP_CODE"
           exit 1
+        fi
+
+    - name: Delete temporary files
+      shell: bash
+      if: always()
+      run: |
+        if [[ -f __issues.json ]]; then
+          rm __issues.json
         fi
